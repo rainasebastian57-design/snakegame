@@ -1,6 +1,7 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.*;
 import java.util.Random;
 
 public class GamePanel extends JPanel implements ActionListener {
@@ -11,23 +12,24 @@ public class GamePanel extends JPanel implements ActionListener {
     static final int GAME_UNITS = (SCREEN_WIDTH * SCREEN_HEIGHT) / (UNIT_SIZE * UNIT_SIZE);
 
     // Authentic Nokia LCD Palette
-    static final Color NOKIA_BG = new Color(155, 188, 15);       // Background screen green
-    static final Color BORDER_COLOR = new Color(15, 56, 15);     // Dark screen frame
-    static final Color SNAKE_HEAD = new Color(20, 60, 20);       // Darker pixel head
-    static final Color SNAKE_BODY = new Color(43, 85, 43);       // Classic olive body segments
-    static final Color APPLE_COLOR = new Color(75, 30, 30);      // Deep retro food color
+    static final Color NOKIA_BG = new Color(155, 188, 15);
+    static final Color BORDER_COLOR = new Color(15, 56, 15);
+    static final Color SNAKE_HEAD = new Color(20, 60, 20);
+    static final Color SNAKE_BODY = new Color(43, 85, 43);
+    static final Color APPLE_COLOR = new Color(75, 30, 30);
 
-    enum State { MENU, DIFFICULTY_SELECT, PLAYING, PAUSED, GAME_OVER }
+    enum State { MENU, DIFFICULTY_SELECT, HIGH_SCORE_SCREEN, PLAYING, PAUSED, GAME_OVER }
     State currentState = State.MENU;
 
     int delay = 80;
     String difficultyName = "MEDIUM";
-    int selectedMenuOption = 0;
+    int selectedMenuOption = 0; // 0: New Game, 1: Difficulty, 2: High Score
 
     final int x[] = new int[GAME_UNITS];
     final int y[] = new int[GAME_UNITS];
     int bodyParts = 6;
     int applesEaten = 0;
+    int highScore = 0;
     int appleX;
     int appleY;
     char direction = 'R';
@@ -42,6 +44,9 @@ public class GamePanel extends JPanel implements ActionListener {
         this.setBackground(NOKIA_BG);
         this.setFocusable(true);
         this.addKeyListener(new MyKeyAdapter());
+        
+        loadHighScore();
+        
         timer = new Timer(delay, this);
     }
 
@@ -66,6 +71,32 @@ public class GamePanel extends JPanel implements ActionListener {
         appleY = random.nextInt((int) (SCREEN_HEIGHT / UNIT_SIZE)) * UNIT_SIZE;
     }
 
+    public void loadHighScore() {
+        try {
+            File file = new File("highscore.txt");
+            if (file.exists()) {
+                BufferedReader reader = new BufferedReader(new FileReader(file));
+                String line = reader.readLine();
+                if (line != null) {
+                    highScore = Integer.parseInt(line.trim());
+                }
+                reader.close();
+            }
+        } catch (Exception e) {
+            highScore = 0;
+        }
+    }
+
+    public void saveHighScore() {
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter("highscore.txt"));
+            writer.write(String.valueOf(highScore));
+            writer.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -84,6 +115,9 @@ public class GamePanel extends JPanel implements ActionListener {
                 break;
             case DIFFICULTY_SELECT:
                 drawDifficultySelect(g);
+                break;
+            case HIGH_SCORE_SCREEN:
+                drawHighScoreScreen(g);
                 break;
             case PLAYING:
             case PAUSED:
@@ -108,15 +142,15 @@ public class GamePanel extends JPanel implements ActionListener {
         g.setFont(new Font("Monospaced", Font.BOLD, 26));
         String[] options = {
             "1. NEW GAME",
-            "2. CONTINUE",
-            "3. DIFFICULTY: " + difficultyName
+            "2. DIFFICULTY: " + difficultyName,
+            "3. HIGH SCORE"
         };
 
         for (int i = 0; i < options.length; i++) {
             if (i == selectedMenuOption) {
-                g.drawString("> " + options[i], 110, 260 + (i * 60));
+                g.drawString("> " + options[i], 110, 270 + (i * 60));
             } else {
-                g.drawString("  " + options[i], 110, 260 + (i * 60));
+                g.drawString("  " + options[i], 110, 270 + (i * 60));
             }
         }
 
@@ -141,50 +175,63 @@ public class GamePanel extends JPanel implements ActionListener {
         }
     }
 
-    private void drawGameplay(Graphics g) {
-        // Draw Retro Apple (with inner pixel shading)
-        g.setColor(APPLE_COLOR);
-        g.fillRect(appleX + 3, appleY + 3, UNIT_SIZE - 6, UNIT_SIZE - 6);
-        g.setColor(BORDER_COLOR);
-        g.drawRect(appleX + 3, appleY + 3, UNIT_SIZE - 6, UNIT_SIZE - 6);
-
-        // Draw Snake
-        for (int i = 0; i < bodyParts; i++) {
-            if (i == 0) {
-                // Snake Head: Distinct darker look with a tiny inner border for pixel style
-                g.setColor(SNAKE_HEAD);
-                g.fillRect(x[i] + 1, y[i] + 1, UNIT_SIZE - 2, UNIT_SIZE - 2);
-                g.setColor(BORDER_COLOR);
-                g.drawRect(x[i] + 1, y[i] + 1, UNIT_SIZE - 2, UNIT_SIZE - 2);
-            } else {
-                // Snake Body: Segmented classic look with margins
-                g.setColor(SNAKE_BODY);
-                g.fillRect(x[i] + 2, y[i] + 2, UNIT_SIZE - 4, UNIT_SIZE - 4);
-            }
-        }
-
-        // Draw Score
-        g.setColor(BORDER_COLOR);
-        g.setFont(new Font("Monospaced", Font.BOLD, 20));
-        g.drawString("SCORE: " + applesEaten, 25, 35);
-    }
-
-    private void drawGameOver(Graphics g) {
-        // Retro popup box
+    private void drawHighScoreScreen(Graphics g) {
         g.setColor(NOKIA_BG);
         g.fillRect(80, 180, SCREEN_WIDTH - 160, 240);
         g.setColor(BORDER_COLOR);
         g.drawRect(80, 180, SCREEN_WIDTH - 160, 240);
         g.drawRect(82, 182, SCREEN_WIDTH - 164, 236);
 
-        g.setFont(new Font("Monospaced", Font.BOLD, 42));
-        drawCenteredText(g, "GAME OVER", 42, 250);
+        g.setFont(new Font("Monospaced", Font.BOLD, 36));
+        drawCenteredText(g, "HIGH SCORE", 36, 240);
 
-        g.setFont(new Font("Monospaced", Font.BOLD, 24));
-        drawCenteredText(g, "SCORE: " + applesEaten, 24, 310);
+        g.setFont(new Font("Monospaced", Font.BOLD, 30));
+        drawCenteredText(g, "" + highScore, 30, 310);
 
         g.setFont(new Font("Monospaced", Font.PLAIN, 18));
-        drawCenteredText(g, "Press ENTER for Menu", 18, 370);
+        drawCenteredText(g, "Press ENTER to Return", 18, 370);
+    }
+
+    private void drawGameplay(Graphics g) {
+        g.setColor(APPLE_COLOR);
+        g.fillRect(appleX + 3, appleY + 3, UNIT_SIZE - 6, UNIT_SIZE - 6);
+        g.setColor(BORDER_COLOR);
+        g.drawRect(appleX + 3, appleY + 3, UNIT_SIZE - 6, UNIT_SIZE - 6);
+
+        for (int i = 0; i < bodyParts; i++) {
+            if (i == 0) {
+                g.setColor(SNAKE_HEAD);
+                g.fillRect(x[i] + 1, y[i] + 1, UNIT_SIZE - 2, UNIT_SIZE - 2);
+                g.setColor(BORDER_COLOR);
+                g.drawRect(x[i] + 1, y[i] + 1, UNIT_SIZE - 2, UNIT_SIZE - 2);
+            } else {
+                g.setColor(SNAKE_BODY);
+                g.fillRect(x[i] + 2, y[i] + 2, UNIT_SIZE - 4, UNIT_SIZE - 4);
+            }
+        }
+
+        g.setColor(BORDER_COLOR);
+        g.setFont(new Font("Monospaced", Font.BOLD, 18));
+        g.drawString("SCORE: " + applesEaten, 25, 35);
+        g.drawString("HI: " + highScore, SCREEN_WIDTH - 110, 35);
+    }
+
+    private void drawGameOver(Graphics g) {
+        g.setColor(NOKIA_BG);
+        g.fillRect(80, 170, SCREEN_WIDTH - 160, 260);
+        g.setColor(BORDER_COLOR);
+        g.drawRect(80, 170, SCREEN_WIDTH - 160, 260);
+        g.drawRect(82, 172, SCREEN_WIDTH - 164, 256);
+
+        g.setFont(new Font("Monospaced", Font.BOLD, 40));
+        drawCenteredText(g, "GAME OVER", 40, 230);
+
+        g.setFont(new Font("Monospaced", Font.BOLD, 22));
+        drawCenteredText(g, "SCORE: " + applesEaten, 22, 280);
+        drawCenteredText(g, "HIGH SCORE: " + highScore, 22, 320);
+
+        g.setFont(new Font("Monospaced", Font.PLAIN, 18));
+        drawCenteredText(g, "Press ENTER for Menu", 18, 385);
     }
 
     private void drawCenteredText(Graphics g, String text, int size, int yPos) {
@@ -212,6 +259,12 @@ public class GamePanel extends JPanel implements ActionListener {
         if ((x[0] == appleX) && (y[0] == appleY)) {
             bodyParts++;
             applesEaten++;
+            
+            if (applesEaten > highScore) {
+                highScore = applesEaten;
+                saveHighScore();
+            }
+            
             newApple();
         }
     }
@@ -255,15 +308,10 @@ public class GamePanel extends JPanel implements ActionListener {
                     if (selectedMenuOption == 0) {
                         startNewGame();
                     } else if (selectedMenuOption == 1) {
-                        if (applesEaten > 0 || currentState == State.PAUSED) {
-                            currentState = State.PLAYING;
-                            timer.start();
-                        } else {
-                            startNewGame();
-                        }
-                    } else if (selectedMenuOption == 2) {
                         selectedMenuOption = 1;
                         currentState = State.DIFFICULTY_SELECT;
+                    } else if (selectedMenuOption == 2) {
+                        currentState = State.HIGH_SCORE_SCREEN;
                     }
                 }
             } else if (currentState == State.DIFFICULTY_SELECT) {
@@ -282,6 +330,11 @@ public class GamePanel extends JPanel implements ActionListener {
                         delay = 40;
                         difficultyName = "HARD";
                     }
+                    selectedMenuOption = 0;
+                    currentState = State.MENU;
+                }
+            } else if (currentState == State.HIGH_SCORE_SCREEN) {
+                if (key == KeyEvent.VK_ENTER || key == KeyEvent.VK_ESCAPE) {
                     selectedMenuOption = 0;
                     currentState = State.MENU;
                 }
